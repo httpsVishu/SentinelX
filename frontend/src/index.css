@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: theme('fontFamily.sans');
+    font-size: 15px;
+  }
+
+  body {
+    @apply bg-paper text-ink antialiased;
+    line-height: 1.55;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-stretch: 75%;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  a {
+    @apply text-carbon underline underline-offset-2 decoration-carbon/40;
+  }
+  a:hover {
+    @apply decoration-carbon;
+  }
+
+  :focus-visible {
+    outline: 2px solid theme('colors.carbon.DEFAULT');
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .narrow {
+    font-stretch: 75%;
+  }
+
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Ink stamp. Mixed case on purpose; the condensed weight does the work. */
+  .stamp {
+    display: inline-block;
+    padding: 0.05em 0.55em;
+    border: 2px solid currentColor;
+    outline: 1px solid currentColor;
+    outline-offset: 2px;
+    border-radius: 2px;
+    font-stretch: 75%;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+    transform: rotate(-2deg);
+  }
+
+  /* Plays once when a ticket page opens, so the status lands like a stamp. */
+  .stamp-in {
+    animation: stamp-down 380ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 border-2 border-ink px-4 py-2 font-semibold no-underline transition-colors disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply bg-ink text-paper hover:bg-carbon-deep hover:border-carbon-deep;
+  }
+  .btn-quiet {
+    @apply bg-transparent text-ink hover:bg-paper-sunk;
+  }
+  .btn-danger {
+    @apply border-stamp bg-transparent text-stamp hover:bg-stamp hover:text-paper;
+  }
+
+  /* Underline-only fields, like a form filled in on paper. */
+  .field {
+    @apply w-full rounded-none border-0 border-b-2 border-ink/50 bg-paper-raised px-2 py-2 text-ink placeholder:text-ink-faint focus:border-carbon focus:outline-none;
+  }
+  .field-label {
+    @apply mb-1 block text-sm font-semibold text-ink-soft;
+  }
+}
+
+@keyframes stamp-down {
+  from {
+    opacity: 0;
+    transform: scale(1.7) rotate(-9deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(-2deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

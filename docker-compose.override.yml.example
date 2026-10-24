@@ -1,0 +1,60 @@
+# ==============================================================================
+# OPTIONAL override for running SentinelX with REAL scanners / a REAL
+# self-hosted LLM instead of the mock adapters.
+#
+# Usage:
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#   Set SCANNER_MODE=real and/or EARLY_AGENT_LLM_MODE=self_hosted in .env
+#   docker compose up --build
+#
+# Nothing here is required for the default mock/demo experience.
+# ==============================================================================
+
+version: "3.9"
+
+services:
+  # OWASP ZAP daemon, exposed as a REST API the zap_adapter.py talks to.
+  zap:
+    image: ghcr.io/zaproxy/zaproxy:stable
+    container_name: sentinelx_zap
+    restart: unless-stopped
+    command: >
+      zap.sh -daemon -host 0.0.0.0 -port 8080
+      -config api.addrs.addr.name=.*
+      -config api.addrs.addr.regex=true
+      -config api.key=${ZAP_API_KEY}
+    ports:
+      - "8080:8080"
+    networks:
+      - sentinelx_net
+
+  # Self-hosted OpenAI-compatible LLM server (vLLM) for the early agents.
+  # Requires a GPU-enabled Docker runtime; sized for a 7-8B instruct model.
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: sentinelx_vllm
+    restart: unless-stopped
+    command: >
+      --model ${SELF_HOSTED_LLM_MODEL_NAME}
+      --host 0.0.0.0
+      --port 8000
+    ports:
+      - "8100:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - sentinelx_net
+
+  # Nuclei and Nmap are invoked as CLI binaries from within the backend
+  # container rather than as separate services. To enable REAL scanner mode,
+  # extend backend/Dockerfile to install the `nuclei` and `nmap` binaries
+  # (see backend/Dockerfile comments) and set SCANNER_MODE=real in .env.
+
+networks:
+  sentinelx_net:
+    external: false
