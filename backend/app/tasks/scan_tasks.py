@@ -27,6 +27,7 @@ from app.models.site import Site
 from app.orchestration.graph import run_scan_pipeline
 from app.services import scan_service
 from app.services.authorization_service import ScanNotAuthorizedError, assert_scan_is_authorized
+from app.services.scan_lock_service import release_site_scan_lock, try_acquire_site_scan_lock
 from app.tasks.celery_app import celery_app
 from app.tasks.notification_tasks import notify_scan_failed
 
@@ -79,6 +80,8 @@ def _mark_failed(db, scan: Scan, site: Site, reason: str) -> None:
 def execute_scan(self, scan_id_str: str) -> None:
     scan_id = uuid.UUID(scan_id_str)
     db = SessionLocal()
+    site: Site | None = None
+    lock_acquired = False
     try:
         scan = db.execute(select(Scan).where(Scan.id == scan_id)).scalar_one_or_none()
         if scan is None or scan.status != ScanStatus.QUEUED:
@@ -91,6 +94,15 @@ def execute_scan(self, scan_id_str: str) -> None:
         except ScanNotAuthorizedError as exc:
             _mark_failed(db, scan, site, str(exc))
             return
+
+        # This protects the check below from the time-of-check/time-of-use
+        # race between two workers that receive queued scans together.
+        if not try_acquire_site_scan_lock(db, site.id):
+            if self.request.retries >= self.max_retries:
+                _mark_failed(db, scan, site, "Another scan of this site kept running, so this one never started.")
+                return
+            raise self.retry(countdown=WAIT_SECONDS)
+        lock_acquired = True
 
         other_running = db.execute(
             select(Scan.id).where(
@@ -120,4 +132,6 @@ def execute_scan(self, scan_id_str: str) -> None:
         site.last_scanned_at = datetime.now(timezone.utc)
         db.commit()
     finally:
+        if lock_acquired and site is not None:
+            release_site_scan_lock(db, site.id)
         db.close()

@@ -50,7 +50,7 @@ class AccountabilityAgent(BaseAgent):
 
         provider = get_late_agent_llm_provider()
         user_prompt = f"severity={severity.value}\nsuggested_deadline_days={suggested_days}\nvendor_mapped={site.vendor_id is not None}"
-        structured = provider.complete_structured(_SYSTEM_PROMPT, user_prompt)  # rationale only, not used for logic
+        provider.complete_structured(_SYSTEM_PROMPT, user_prompt)  # rationale only, not used for logic
 
         output = AccountabilityOutput(
             finding_id=finding_id,

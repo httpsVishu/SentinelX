@@ -12,7 +12,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.enums import AuditAction, TicketStatus
+from app.models.enums import AuditAction
 from app.models.ticket import Ticket
 from app.models.vendor import Vendor
 from app.schemas.vendor import VendorCreate, VendorUpdate
@@ -66,21 +66,16 @@ def update_vendor(db: Session, vendor_id: uuid.UUID, department_id: uuid.UUID, d
 def delete_vendor(db: Session, vendor_id: uuid.UUID, department_id: uuid.UUID) -> None:
     vendor = get_vendor(db, vendor_id, department_id)
 
-    open_ticket_exists = db.execute(
+    ticket_exists = db.execute(
         select(Ticket.id).where(
             Ticket.vendor_id == vendor.id,
-            Ticket.status.in_([
-                TicketStatus.OPEN,
-                TicketStatus.OVERDUE,
-                TicketStatus.FIX_SUBMITTED_PENDING_VERIFICATION,
-            ]),
         ).limit(1)
     ).scalar_one_or_none()
 
-    if open_ticket_exists is not None:
+    if ticket_exists is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot delete a vendor with open or in-progress tickets. Resolve or reassign them first.",
+            detail="Cannot delete a vendor with ticket history. Retain the vendor for audit history.",
         )
 
     db.delete(vendor)

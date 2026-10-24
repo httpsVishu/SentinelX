@@ -9,12 +9,11 @@ before being handed to downstream agents.
 """
 import uuid
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import httpx
 
 from app.agents.base_agent import BaseAgent
-from app.config import settings
 from app.llm import get_early_agent_llm_provider
 from app.models.enums import AgentName
 from app.schemas.agent import ReconOutput

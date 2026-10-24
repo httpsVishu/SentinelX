@@ -10,6 +10,7 @@ interface NavItem {
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'Overview', end: true },
   { to: '/admin/findings', label: 'Review queue' },
+  { to: '/admin/all-findings', label: 'All findings' },
   { to: '/admin/tickets', label: 'Tickets' },
   { to: '/admin/sites', label: 'Sites' },
   { to: '/admin/vendors', label: 'Vendors' },

@@ -26,6 +26,7 @@ from app.schemas.ticket import (
     VendorTicketRead,
 )
 from app.services import ticket_service
+from app.tasks.notification_tasks import notify_vendor_of_ticket_change
 from app.tasks.verification_tasks import run_verification_scan
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
@@ -90,7 +91,16 @@ def assign_ticket(
     ticket_id: uuid.UUID, data: TicketAssignUpdate,
     current_user: User = Depends(require_admin), db: Session = Depends(get_db),
 ) -> TicketRead:
-    return ticket_service.assign_ticket(db, ticket_id, current_user.department_id, data, current_user.id)
+    result = ticket_service.assign_ticket(db, ticket_id, current_user.department_id, data, current_user.id)
+
+    # A vendor change supersedes a deadline-change notice: the new owner needs
+    # one clear assignment message containing the effective deadline.
+    if result.vendor_changed:
+        notify_vendor_of_ticket_change.delay(str(result.ticket.id), "assigned")
+    elif result.deadline_changed:
+        notify_vendor_of_ticket_change.delay(str(result.ticket.id), "deadline_changed")
+
+    return result.ticket
 
 
 @router.post("/{ticket_id}/reverify", response_model=TicketRead)

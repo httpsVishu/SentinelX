@@ -19,6 +19,7 @@ celery_app = Celery(
         "app.tasks.verification_tasks",
         "app.tasks.approval_tasks",
         "app.tasks.notification_tasks",
+        "app.tasks.maintenance_tasks",
     ],
 )
 
@@ -43,5 +44,9 @@ celery_app.conf.beat_schedule = {
     "daily-deadline-check": {
         "task": "app.tasks.deadline_tasks.check_overdue_tickets",
         "schedule": crontab(minute="0", hour="2"),  # daily at 02:00 UTC
+    },
+    "fail-stuck-scans": {
+        "task": "app.tasks.maintenance_tasks.fail_stuck_scans",
+        "schedule": crontab(minute="*/15"),
     },
 }

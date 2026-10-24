@@ -20,16 +20,20 @@ from app.models.site import Site
 from app.models.ticket import Ticket
 from app.models.user import User
 from app.orchestration.graph import run_verification_pipeline
+from app.services.authorization_service import ScanNotAuthorizedError, assert_scan_is_authorized
 from app.services.alert_service import create_and_dispatch_alert
+from app.services.scan_lock_service import release_site_scan_lock, try_acquire_site_scan_lock
 from app.tasks.celery_app import celery_app
 
 logger = logging.getLogger("sentinelx.tasks.verification")
 
 
-@celery_app.task(name="app.tasks.verification_tasks.run_verification_scan", bind=True, max_retries=1, default_retry_delay=30)
+@celery_app.task(name="app.tasks.verification_tasks.run_verification_scan", bind=True, max_retries=60, default_retry_delay=30)
 def run_verification_scan(self, ticket_id_str: str) -> None:
     ticket_id = uuid.UUID(ticket_id_str)
     db = SessionLocal()
+    site: Site | None = None
+    lock_acquired = False
     try:
         ticket = db.execute(select(Ticket).where(Ticket.id == ticket_id)).scalar_one_or_none()
         # Only a ticket with a submitted fix is verified. This also stops a
@@ -39,6 +43,26 @@ def run_verification_scan(self, ticket_id_str: str) -> None:
 
         site = db.execute(select(Site).where(Site.id == ticket.site_id)).scalar_one()
         finding = db.execute(select(Finding).where(Finding.id == ticket.finding_id)).scalar_one()
+
+        # Verification is a scan too: it must obey the same target-safety and
+        # one-scan-per-site guarantees as scheduled and manual scans.
+        if not site.is_active:
+            _alert_verification_unavailable(db, site, ticket, "The site is paused, so the reported fix was not re-scanned.")
+            return
+        try:
+            assert_scan_is_authorized(db, site)
+        except ScanNotAuthorizedError as exc:
+            _alert_verification_unavailable(db, site, ticket, str(exc))
+            return
+
+        if not try_acquire_site_scan_lock(db, site.id):
+            if self.request.retries >= self.max_retries:
+                _alert_verification_unavailable(
+                    db, site, ticket, "Another scan of this site did not finish in time for verification."
+                )
+                return
+            raise self.retry(countdown=self.default_retry_delay)
+        lock_acquired = True
 
         scan = Scan(
             site_id=site.id,
@@ -102,7 +126,30 @@ def run_verification_scan(self, ticket_id_str: str) -> None:
                 ticket_id=ticket.id,
             )
     finally:
+        if lock_acquired and site is not None:
+            release_site_scan_lock(db, site.id)
         db.close()
+
+
+def _alert_verification_unavailable(db, site: Site, ticket: Ticket, reason: str) -> None:
+    """Keep the ticket pending and make a blocked verification visible."""
+    admins = db.execute(
+        select(User).where(User.department_id == site.department_id, User.role == UserRole.ADMIN)
+    ).scalars().all()
+    for admin in admins:
+        create_and_dispatch_alert(
+            db,
+            admin,
+            AlertTriggerType.SCAN_FAILED,
+            site_name=site.name,
+            action_required=(
+                "A reported fix could not be checked automatically. "
+                f"{reason} Resolve the issue, then use Re-run verification on the ticket."
+            ),
+            severity=ticket.severity.value,
+            site_id=site.id,
+            ticket_id=ticket.id,
+        )
 
 
 def _alert_failed_fix(db, site: Site, ticket: Ticket, admins: list[User]) -> None:

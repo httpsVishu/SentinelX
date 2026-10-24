@@ -17,7 +17,6 @@ from app.models.enums import (
     TicketStatus,
 )
 from app.models.finding import Finding
-from app.models.scan import Scan
 from app.models.ticket import Ticket
 from app.orchestration.graph import run_scan_pipeline
 from tests import factories

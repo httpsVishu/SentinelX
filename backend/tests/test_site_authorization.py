@@ -1,12 +1,10 @@
 """The IT Act rule: no scan of a restricted site without a written authorization
 on file. Also site input validation and the schedule and exclusion settings."""
 import uuid
-from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import select
 
-from app.models.authorization_record import AuthorizationRecord
 from app.models.enums import AuditAction, ScanStatus
 from app.models.scan import Scan
 from app.services.authorization_service import url_is_restricted_domain

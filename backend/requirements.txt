@@ -9,7 +9,8 @@ email-validator==2.2.0
 
 # ---- Database ----
 sqlalchemy==2.0.35
-psycopg[binary]==3.2.2
+# 3.2.2 has no macOS ARM/Python 3.9 binary wheel, preventing local test setup.
+psycopg[binary]==3.2.4
 alembic==1.13.3
 
 # ---- Auth / security ----
